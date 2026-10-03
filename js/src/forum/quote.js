@@ -6,22 +6,62 @@ import * as basket from './basket';
 const t = (key, params) => app.translator.trans(`ernestdefoe-sheaf.forum.${key}`, params);
 
 /**
- * flarum/mentions' own insertMention(post, composer, quote): the function its
- * Quote button calls. Reusing it (rather than copying it) means the inserted
- * text is exactly `> @"Display Name"#p123 quoted text`, so the post mention is
- * parsed, the quoted member is notified, and editors that translate inserted
- * Markdown (Scribe) see the same input they see from the Quote button.
+ * flarum/mentions' insertMention(post, composer, quote), the function behind
+ * its own Quote button (forum/utils/reply.js).
  *
- * Looked up at call time, not import time: mentions is optional, and a
- * disabled extension's module is simply not in the registry.
+ * Only that file's default export, reply(), is in the registry, and reply()
+ * always opens the composer for the QUOTED post's discussion, which is wrong
+ * for a quote collected from another thread. So this is insertMention
+ * line for line, with the mention itself still built by mentions' own
+ * formatter (app.mentionFormats), so the text is exactly what its Quote
+ * button produces: `> @"Display Name"#p123 quoted text`. The post mention is
+ * parsed, the quoted member is notified, and an editor that translates
+ * inserted Markdown (Scribe) receives the same input it gets from mentions.
+ *
+ * Looked up at call time: mentions is optional, and when it is disabled
+ * app.mentionFormats does not exist.
  */
 function mentionsInsert() {
+  let mentionable = null;
   try {
-    const mod = flarum.reg.get('flarum-mentions', 'forum/utils/reply');
-    return mod && typeof mod.insertMention === 'function' ? mod.insertMention : null;
+    mentionable = app.mentionFormats && app.mentionFormats.mentionable('post');
   } catch (e) {
-    return null;
+    mentionable = null;
   }
+  if (!mentionable) return null;
+
+  return async function insertMention(post, composer, quote, separate = false) {
+    await composer.editorReady();
+
+    const mention = mentionable.replacement(post) + ' ';
+
+    // If the composer is empty, then assume we're starting a new reply.
+    // In which case we don't want the user to have to confirm if they
+    // close the composer straight away.
+    if (!composer.fields.content()) {
+      composer.body.attrs.originalContent = mention;
+    }
+
+    const cursorPosition = composer.editor.getSelectionRange()[0];
+    const preceding = composer.fields.content().slice(0, cursorPosition);
+    const precedingNewlines = preceding.length == 0 ? 0 : 3 - preceding.match(/(\n{0,2})$/)[0].length;
+
+    // The one departure from mentions: between two of OUR quotes, one more
+    // blank line. Flarum's Markdown joins quotes separated by a single blank
+    // line into one blockquote; two keep each quote its own block. (An editor
+    // that converts inserted Markdown, like Scribe, skips blank lines and
+    // already gives each insert its own quote.)
+    const extra = separate && /\n\n$/.test(preceding) && !/\n\n\n$/.test(preceding) ? '\n' : '';
+
+    composer.editor.insertAtCursor(
+      extra +
+        Array(precedingNewlines).join('\n') + // Insert up to two newlines, depending on preceding whitespace
+        (quote ? '> ' + mention + quote.trim().replace(/\n/g, '\n> ') + '\n\n' : mention),
+      false
+    );
+
+    return composer;
+  };
 }
 
 export function mentionsEnabled() {
@@ -111,7 +151,9 @@ export function htmlToQuoteText(html) {
   };
 
   return walk(root)
-    .replace(/[ \t]+\n/g, '\n')
+    .split(/(```[\s\S]*?```)/)
+    .map((part, i) => (i % 2 ? part : part.replace(/[ \t]+\n/g, '\n').replace(/\n[ \t]+/g, '\n')))
+    .join('')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -189,7 +231,7 @@ function quoteFor(item, post, targetDiscussionId) {
  * a plain Markdown blockquote with the author's name. Same whitespace rules as
  * mentions' insertMention so the two read alike.
  */
-async function plainInsert(post, composer, quote) {
+async function plainInsert(post, composer, quote, separate = false) {
   await composer.editorReady();
   const user = post.user();
   const name = user ? user.displayName() : extractText(app.translator.trans('core.lib.username.deleted_text'));
@@ -199,7 +241,9 @@ async function plainInsert(post, composer, quote) {
   const preceding = composer.fields.content().slice(0, cursor);
   const newlines = preceding.length === 0 ? 0 : 3 - preceding.match(/(\n{0,2})$/)[0].length;
 
-  composer.editor.insertAtCursor(Array(newlines).join('\n') + '> ' + head + '\n> ' + quote.trim().replace(/\n/g, '\n> ') + '\n\n', false);
+  const extra = separate && /\n\n$/.test(preceding) && !/\n\n\n$/.test(preceding) ? '\n' : '';
+
+  composer.editor.insertAtCursor(extra + Array(newlines).join('\n') + '> ' + head + '\n> ' + quote.trim().replace(/\n/g, '\n> ') + '\n\n', false);
   return composer;
 }
 
@@ -249,8 +293,9 @@ export async function insertAll(discussion) {
 
   const insert = mentionsInsert() || plainInsert;
 
-  for (const { item, post } of found) {
-    await insert(post, composer, quoteFor(item, post, discussion.id()));
+  for (let i = 0; i < found.length; i++) {
+    const { item, post } = found[i];
+    await insert(post, composer, quoteFor(item, post, discussion.id()), i > 0);
   }
 
   pending = { discussionId: discussion.id(), keys: found.map(({ item }) => item.key) };

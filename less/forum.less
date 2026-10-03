@@ -32,6 +32,12 @@
   border-radius: var(--border-radius);
   overflow: hidden;
   white-space: nowrap;
+  // The wrapper is not a .Button, so mentions' tooltip colours do not reach
+  // it; give it the same ones.
+  background: var(--tooltip-bg);
+  color: var(--tooltip-color);
+  box-shadow: 0 2px 8px var(--shadow-color);
+  z-index: 5;
 
   > .Button {
     background: transparent;
@@ -215,14 +221,40 @@
 }
 
 @media (max-width: 767px) {
+  // Left-aligned on a phone: the bottom-right corner is where themes and
+  // extensions park their round floating buttons (back to top, who's online).
   .Sheaf-pill {
+    left: ~"calc(16px + env(safe-area-inset-left, 0px))";
+    transform: none;
+    max-width: ~"calc(100vw - 96px)";
     bottom: ~"calc(var(--sheaf-offset, 0px) + 12px + env(safe-area-inset-bottom, 0px))";
+    animation-name: Sheaf-in-phone;
+  }
+  .Sheaf-popover {
+    left: 0;
+    transform: none;
+    width: ~"calc(100vw - 32px)";
+  }
+  .Sheaf-reply span {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .Sheaf-reply {
     padding: 12px 12px 12px 16px;
   }
   .Sheaf-iconButton {
     width: 44px;
+  }
+}
+
+@keyframes Sheaf-in-phone {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 
