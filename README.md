@@ -66,6 +66,10 @@ composer update ernestdefoe/sheaf
 php flarum cache:clear
 ```
 
+## Discuss
+
+Questions, ideas and release notes: [Sheaf on discuss.flarum.org](https://discuss.flarum.org/d/39989-sheaf).
+
 ## Licence
 
 MIT.
