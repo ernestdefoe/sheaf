@@ -12,6 +12,7 @@
     "license": "MIT",
     "homepage": "https://github.com/ernestdefoe/sheaf",
     "support": {
+        "forum": "https://discuss.flarum.org/d/39989-sheaf",
         "issues": "https://github.com/ernestdefoe/sheaf/issues",
         "source": "https://github.com/ernestdefoe/sheaf"
     },
