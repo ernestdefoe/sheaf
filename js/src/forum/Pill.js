@@ -18,7 +18,9 @@ function currentDiscussion() {
 }
 
 function excerpt(text, max = 90) {
-  const s = String(text || '').replace(/\s+/g, ' ').trim();
+  const s = String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim();
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
 
@@ -158,9 +160,7 @@ export default class Pill extends Component {
 
     return (
       <div className="Sheaf-popover" id="sheaf-list">
-        <div className="Sheaf-popoverHead">
-          {t('list_heading', { count: items.length, max: basket.maxQuotes() })}
-        </div>
+        <div className="Sheaf-popoverHead">{t('list_heading', { count: items.length, max: basket.maxQuotes() })}</div>
         <ul className="Sheaf-list">
           {items.map((i) => (
             <li className="Sheaf-item" key={i.key}>

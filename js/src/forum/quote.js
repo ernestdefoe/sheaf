@@ -87,7 +87,10 @@ export function htmlToQuoteText(html) {
     if (node.nodeType !== Node.ELEMENT_NODE) return '';
 
     const tag = node.tagName.toLowerCase();
-    const inner = (extra = {}) => Array.from(node.childNodes).map((c) => walk(c, { ...ctx, ...extra })).join('');
+    const inner = (extra = {}) =>
+      Array.from(node.childNodes)
+        .map((c) => walk(c, { ...ctx, ...extra }))
+        .join('');
 
     switch (tag) {
       case 'br':
