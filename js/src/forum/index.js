@@ -9,7 +9,6 @@ import * as basket from './basket';
 import { onPosted, forgetPending, pendingFor } from './quote';
 import Pill from './Pill';
 import Model from 'flarum/common/Model';
-import ForumApplication from 'flarum/forum/ForumApplication';
 
 const t = (key, params) => app.translator.trans(`ernestdefoe-sheaf.forum.${key}`, params);
 
@@ -162,7 +161,7 @@ app.initializers.add('ernestdefoe-sheaf', () => {
     // pending is only a label hint
   }
 
-  extend(ForumApplication.prototype, 'mount', () => {
+  extend(app, 'mount', () => {
     try {
       mountPill();
     } catch (e) {
