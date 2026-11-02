@@ -56,8 +56,12 @@ export default class Pill extends Component {
     document.addEventListener('keydown', this.onKey);
     this.measure = this.measure.bind(this);
     window.addEventListener('resize', this.measure);
-    this.timer = setInterval(this.measure, 300);
-    this.measure();
+    this.track();
+  }
+
+  onupdate(vnode) {
+    super.onupdate(vnode);
+    this.track();
   }
 
   onremove(vnode) {
@@ -66,6 +70,23 @@ export default class Pill extends Component {
     document.removeEventListener('keydown', this.onKey);
     window.removeEventListener('resize', this.measure);
     clearInterval(this.timer);
+  }
+
+  /**
+   * Re-measure only while the pill is actually showing (quotes collected, on a
+   * discussion). The composer slides and is drag-resized without a redraw, so
+   * a short poll is the one thing that follows it; when the pill is empty the
+   * poll stops, so a member with nothing collected pays nothing.
+   */
+  track() {
+    const showing = !!(this.element && this.element.firstElementChild);
+    if (showing && !this.timer) {
+      this.timer = setInterval(() => document.hidden || this.measure(), 300);
+      this.measure();
+    } else if (!showing && this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
   }
 
   /**

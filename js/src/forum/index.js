@@ -8,6 +8,8 @@ import classList from 'flarum/common/utils/classList';
 import * as basket from './basket';
 import { onPosted, forgetPending, pendingFor } from './quote';
 import Pill from './Pill';
+import Model from 'flarum/common/Model';
+import ForumApplication from 'flarum/forum/ForumApplication';
 
 const t = (key, params) => app.translator.trans(`ernestdefoe-sheaf.forum.${key}`, params);
 
@@ -101,61 +103,34 @@ function addSelectionButton() {
  * Clear what was inserted once the reply is actually POSTED — not when it is
  * inserted, so a draft that is abandoned does not lose the collection.
  *
- * ReplyComposer.onsubmit creates the post record and saves it in the same
- * synchronous turn; the save's promise is the one place that knows the post
- * went through. Wrapping createRecord for exactly that call catches it
- * without copying the method.
+ * Reply and edit composers save the post in the same synchronous turn as
+ * onsubmit, so a flag raised for exactly that call picks out the one post save
+ * whose promise says the post went through. Both hooks are plain extend /
+ * override on public classes; nothing in the store is replaced.
  */
+let submitting = false;
+
 function clearOnPost() {
-  override('flarum/forum/components/ReplyComposer', 'onsubmit', function (original, ...args) {
-    const discussion = this.attrs.discussion;
-    if (!discussion || !pendingFor(discussion.id())) return original(...args);
-
-    const store = app.store;
-    const create = store.createRecord;
-    store.createRecord = function (type, ...rest) {
-      store.createRecord = create;
-      const record = create.call(this, type, ...rest);
-      if (type === 'posts') {
-        const save = record.save;
-        record.save = function (...saveArgs) {
-          return save.apply(this, saveArgs).then((post) => {
-            onPosted();
-            return post;
-          });
-        };
+  const watch = (name, discussionOf) =>
+    override(`flarum/forum/components/${name}`, 'onsubmit', function (original, ...args) {
+      const discussion = discussionOf(this.attrs);
+      submitting = !!(discussion && pendingFor(discussion.id()));
+      try {
+        return original(...args);
+      } finally {
+        submitting = false;
       }
-      return record;
-    };
+    });
 
-    try {
-      return original(...args);
-    } finally {
-      store.createRecord = create;
-    }
-  });
-
+  watch('ReplyComposer', (attrs) => attrs.discussion);
   // Mentions inserts into an open EDIT composer when it is for the same
   // discussion, so a quote can be posted by saving an edit too.
-  override('flarum/forum/components/EditPostComposer', 'onsubmit', function (original, ...args) {
-    const post = this.attrs.post;
-    const discussion = post && post.discussion();
-    if (!discussion || !pendingFor(discussion.id())) return original(...args);
+  watch('EditPostComposer', (attrs) => attrs.post && attrs.post.discussion());
 
-    const save = post.save;
-    post.save = function (...saveArgs) {
-      post.save = save;
-      return save.apply(this, saveArgs).then((saved) => {
-        onPosted();
-        return saved;
-      });
-    };
-
-    try {
-      return original(...args);
-    } finally {
-      post.save = save;
-    }
+  extend(Model.prototype, 'save', function (promise) {
+    if (!submitting || this.data.type !== 'posts' || !promise) return;
+    submitting = false;
+    promise.then(onPosted, () => {});
   });
 }
 
@@ -187,7 +162,7 @@ app.initializers.add('ernestdefoe-sheaf', () => {
     // pending is only a label hint
   }
 
-  extend(app, 'mount', () => {
+  extend(ForumApplication.prototype, 'mount', () => {
     try {
       mountPill();
     } catch (e) {
